@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dịch phim trực tiếp từ âm thanh tab</title>
+<style>
+  :root { --bg:#0f1115; --panel:#181b22; --line:#20242e; --text:#e8eaf0; --muted:#8a92a3; --accent:#4f8cff; --danger:#e5484d; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { padding:16px 24px; border-bottom:1px solid #262b36; }
+  h1 { font-size:18px; margin:0; }
+  main { max-width:1000px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; }
+  .stage video { width:100%; height:100%; object-fit:contain; display:block; }
+  .placeholder { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; text-align:center; padding:20px; }
+  #overlay { position:absolute; left:5%; right:5%; bottom:6%; text-align:center; display:none; pointer-events:none; }
+  #overlay .vi { display:inline-block; background:rgba(0,0,0,.65); color:#fff; font-size:22px; padding:6px 12px; border-radius:6px; line-height:1.4; }
+  #overlay .en { display:block; margin-top:4px; color:#ddd; font-size:15px; }
+  .controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; background:var(--panel); padding:16px; border-radius:12px; }
+  label { display:flex; flex-direction:column; font-size:13px; color:var(--muted); gap:6px; }
+  label.check { flex-direction:row; align-items:center; color:var(--text); font-size:14px; gap:8px; }
+  select { background:#0f1115; color:var(--text); border:1px solid #303644; border-radius:8px; padding:9px 10px; font-size:14px; min-width:160px; }
+  button { border:0; border-radius:8px; padding:10px 18px; font-size:15px; cursor:pointer; color:#fff; background:var(--accent); }
+  button.stop { background:var(--danger); }
+  button.secondary { background:#303644; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .status { font-size:14px; color:var(--muted); min-height:20px; }
+  .warn { background:#3a2a10; color:#ffd58a; padding:12px 14px; border-radius:8px; font-size:14px; display:none; line-height:1.5; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:720px){ .grid{ grid-template-columns:1fr; } }
+  .box { background:var(--panel); border-radius:12px; padding:16px; height:40vh; overflow:auto; }
+  .box h2 { font-size:13px; color:var(--muted); margin:0 0 12px; text-transform:uppercase; letter-spacing:.05em; }
+  .item { padding:8px 10px; border-radius:8px; margin-bottom:8px; background:var(--line); line-height:1.5; font-size:16px; }
+  .vi-item { color:#cfe3ff; font-size:18px; }
+  .hint { font-size:13px; color:var(--muted); line-height:1.6; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header><h1>Dịch phim trực tiếp từ âm thanh tab (Anh → Việt)</h1></header>
+
+<main>
+  <div id="warn" class="warn">
+    Trình duyệt này không hỗ trợ chia sẻ tab kèm âm thanh. Hãy dùng <b>Google Chrome</b> hoặc <b>Microsoft Edge</b> trên máy tính.
+  </div>
+
+  <section class="stage">
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="placeholder" class="placeholder">Nhấn "Bắt đầu", chọn <b>đúng tab đang phát phim</b>,
+      rồi tick ô <b>"Chia sẻ âm thanh tab"</b>.</div>
+    <div id="overlay"><span class="vi" id="ovVi"></span><span class="en" id="ovEn"></span></div>
+  </section>
+
+  <section class="controls">
+    <label>Giọng đọc tiếng Việt
+      <select id="voice"></select>
+    </label>
+    <label>Tốc độ đọc
+      <select id="rate">
+        <option value="0.9">Chậm</option>
+        <option value="1.1" selected>Vừa</option>
+        <option value="1.3">Nhanh</option>
+        <option value="1.5">Rất nhanh</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="speakOn" checked> Đọc to bản dịch (lồng tiếng)</label>
+    <div class="row">
+      <button id="toggle">▶ Bắt đầu</button>
+      <button id="clear" class="secondary">Xóa</button>
+    </div>
+  </section>
+
+  <div id="status" class="status">Chưa bắt đầu.</div>
+
+  <section class="grid">
+    <div class="box">
+      <h2>Lời thoại gốc (tiếng Anh)</h2>
+      <div id="en"></div>
+    </div>
+    <div class="box">
+      <h2>Bản dịch (tiếng Việt)</h2>
+      <div id="vi"></div>
+    </div>
+  </section>
+
+  <p class="hint">
+    <b>Lưu ý:</b> Âm thanh được lấy trực tiếp từ tab, nên không cần micro và không thu tiếng ồn xung quanh.
+    Phim vẫn phát tiếng gốc; bản dịch đọc chồng lên. Muốn nghe rõ bản lồng tiếng, hãy hạ âm lượng phim hoặc dùng tai nghe.
+    Máy chủ <code>server.py</code> cần chạy trên máy bạn, với biến môi trường <code>OPENAI_API_KEY</code>.
+  </p>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const els = {
+    toggle: $('toggle'), clear: $('clear'), status: $('status'), warn: $('warn'),
+    preview: $('preview'), placeholder: $('placeholder'), overlay: $('overlay'),
+    ovVi: $('ovVi'), ovEn: $('ovEn'), en: $('en'), vi: $('vi'),
+    speakOn: $('speakOn'), voice: $('voice'), rate: $('rate')
+  };
+
+  // Tham số cắt đoạn: chờ hết câu (im lặng) rồi mới gửi đi
+  const THRESH = 0.015;      // mức âm lượng coi là có tiếng
+  const MIN_MS = 1000;       // đoạn tối thiểu
+  const MAX_MS = 12000;      // đoạn tối đa (tránh quá dài)
+  const SILENCE_MS = 700;    // im lặng bao lâu thì kết thúc câu
+  const NOISE_MS = 2500;     // không có tiếng sau thời gian này thì bỏ qua đoạn
+  const MAX_QUEUE = 4;       // nếu xử lý không kịp, bỏ đoạn cũ để bám theo phim
+
+  let stream = null, audioStream = null, audioCtx = null, analyser = null;
+  let running = false, busy = false, overlayTimer = null;
+  const queue = [];
+  const context = [];
+
+  const unsupported = !navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.MediaRecorder;
+  if (unsupported) {
+    els.warn.style.display = 'block';
+    els.toggle.disabled = true;
+  }
+
+  function setStatus(msg) { els.status.textContent = msg; }
+
+  function addLine(box, text, cls = 'item') {
+    const d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    box.appendChild(d);
+    box.parentElement.scrollTop = box.parentElement.scrollHeight;
+  }
+
+  // ---------- Giọng đọc ----------
+  let voices = [];
+  function populateVoices() {
+    voices = speechSynthesis.getVoices();
+    const prev = els.voice.value;
+    els.voice.innerHTML = '';
+    const vi = voices.filter(v => v.lang.toLowerCase().startsWith('vi'));
+    if (!vi.length) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Không có giọng tiếng Việt (dùng mặc định)';
+      els.voice.appendChild(o);
+    }
+    (vi.length ? vi : voices).forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = `${v.name} (${v.lang})`;
+      els.voice.appendChild(o);
+    });
+    if (prev) els.voice.value = prev;
+  }
+  speechSynthesis.onvoiceschanged = populateVoices;
+  populateVoices();
+
+  function speak(text) {
+    const u = new SpeechSynthesisUtterance(text);
+    const v = voices.find(x => x.name === els.voice.value);
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'vi-VN'; }
+    u.rate = parseFloat(els.rate.value);
+    speechSynthesis.speak(u);
+  }
+
+  // ---------- Thu âm và cắt đoạn ----------
+  function pickMime() {
+    return ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  function level() {
+    if (!analyser) return 0;
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    let s = 0;
+    for (const x of buf) s += x * x;
+    return Math.sqrt(s / buf.length);
+  }
+
+  function recordLoop() {
+    if (!running) return;
+    const mime = pickMime();
+    const rec = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    const t0 = performance.now();
+    let lastVoice = 0, heard = false;
+
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      const dur = performance.now() - t0;
+      if (heard && dur >= MIN_MS) enqueue(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }));
+      recordLoop();
+    };
+    rec.start();
+
+    const timer = setInterval(() => {
+      const now = performance.now(), dur = now - t0;
+      if (level() > THRESH) { lastVoice = now; heard = true; }
+      const endOfSentence = heard && dur >= MIN_MS && now - lastVoice > SILENCE_MS;
+      if (endOfSentence || dur > MAX_MS || (!heard && dur > NOISE_MS) || !running) {
+        clearInterval(timer);
+        if (rec.state !== 'inactive') rec.stop();
+      }
+    }, 100);
+  }
+
+  // ---------- Gửi lên máy chủ và hiển thị ----------
+  function enqueue(blob) {
+    queue.push(blob);
+    while (queue.length > MAX_QUEUE) queue.shift();
+    processQueue();
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result.split(',')[1]);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function processQueue() {
+    if (busy) return;
+    busy = true;
+    while (queue.length && running) {
+      const blob = queue.shift();
+      try {
+        const audio = await blobToBase64(blob);
+        const r = await fetch('/api/subtitle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio, mime: blob.type, context: context.slice(-4) })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+        if (data.en && running) showLine(data.en, data.vi);
+      } catch (e) {
+        setStatus('Lỗi: ' + e.message);
+      }
+    }
+    busy = false;
+  }
+
+  function showLine(en, vi) {
+    context.push(en);
+    addLine(els.en, en);
+    addLine(els.vi, vi, 'item vi-item');
+    els.ovVi.textContent = vi;
+    els.ovEn.textContent = en;
+    els.overlay.style.display = 'block';
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(() => { els.overlay.style.display = 'none'; }, 6000);
+    if (els.speakOn.checked && vi) speak(vi);
+    setStatus('Đang nghe...');
+  }
+
+  // ---------- Bắt đầu / dừng ----------
+  async function start() {
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+    } catch (e) {
+      setStatus('Không mở được chia sẻ tab: ' + e.message);
+      return;
+    }
+    if (!stream.getAudioTracks().length) {
+      stream.getTracks().forEach(t => t.stop());
+      setStatus('Chưa có âm thanh. Hãy chọn đúng tab đang phát phim và tick "Chia sẻ âm thanh tab".');
+      return;
+    }
+
+    audioStream = new MediaStream(stream.getAudioTracks());
+    audioCtx = new AudioContext();
+    await audioCtx.resume();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    audioCtx.createMediaStreamSource(audioStream).connect(analyser); // chỉ phân tích, không phát lại
+
+    els.preview.srcObject = stream;
+    els.placeholder.style.display = 'none';
+    stream.getTracks().forEach(t => t.addEventListener('ended', stop)); // người dùng bấm "Dừng chia sẻ"
+
+    running = true;
+    updateButton();
+    setStatus('Đang nghe âm thanh tab...');
+    recordLoop();
+  }
+
+  function stop() {
+    if (!running && !stream) return;
+    running = false;
+    queue.length = 0;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    audioStream = null;
+    analyser = null;
+    if (audioCtx) audioCtx.close();
+    audioCtx = null;
+    els.preview.srcObject = null;
+    els.placeholder.style.display = '';
+    els.overlay.style.display = 'none';
+    speechSynthesis.cancel();
+    updateButton();
+    setStatus('Đã dừng.');
+  }
+
+  function updateButton() {
+    els.toggle.textContent = running ? '■ Dừng' : '▶ Bắt đầu';
+    els.toggle.classList.toggle('stop', running);
+  }
+
+  els.toggle.addEventListener('click', () => running ? stop() : start());
+  els.clear.addEventListener('click', () => {
+    els.en.innerHTML = ''; els.vi.innerHTML = ''; context.length = 0;
+  });
+})();
+</script>
+<script>window.__CF$cv$params={r:'a5d376d60c1849e4',t:'MTc5NTEzNTg2NQ==',u:'01a1f66f84b67544b2674d1318352892',ut:'B.rTTknmoh9sVIS3O.VoAQQAkCvNPJOdag99e4zz.wQ-1795135866-1.2.1.1-FYN8kBtKdaMhcYE74nxGG46D0tA5HsoAzQ_4dou0oXxFYevDA4aru5SIdkRz_YyznD1KjfLNqw3r2KUjaLCC1Ol7.rlTZnOSD4C37GLTSBc',i:60};(function(){if(!document.body)return;var l=window.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/precursor/main.js?ray=a5d376d60c1849e4',s=document.createElement('script');s.src=o?new URL(u,o).href:u;document.head.appendChild(s);})();</script></body>
+</html>
